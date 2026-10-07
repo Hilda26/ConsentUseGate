@@ -89,6 +89,13 @@ def _parse_iso(value: str):
     return dt
 
 
+def _refund_deadline_passed(refund_deadline: str) -> bool:
+    parsed = _parse_iso(refund_deadline)
+    if parsed is None:
+        return True
+    return datetime.now(timezone.utc) >= parsed
+
+
 def _addr_eq(a, b) -> bool:
     return bytes(a.as_bytes) == bytes(b.as_bytes)
 
@@ -288,6 +295,8 @@ class ConsentUseGate(gl.Contract):
             raise gl.vm.UserError("policy is not active")
         if r.status not in (REQUEST_PENDING, REQUEST_ERRORED):
             raise gl.vm.UserError("request is not reviewable")
+        if _refund_deadline_passed(str(r.refund_deadline)):
+            raise gl.vm.UserError("refund deadline has passed; refund only")
 
         policy_state_at_round_start = p.state
         request_status_at_round_start = r.status
@@ -344,6 +353,8 @@ Use MALFORMED_REQUEST when the intended use is unusable."""
 
         if p.state != policy_state_at_round_start or r.status != request_status_at_round_start:
             return
+        if _refund_deadline_passed(str(r.refund_deadline)):
+            return
 
         parsed = _parse_decision(raw_result)
         if not parsed["ok"]:
@@ -372,7 +383,7 @@ Use MALFORMED_REQUEST when the intended use is unusable."""
         r = self._get_request(request_id)
         if r.status not in (REQUEST_PENDING, REQUEST_ERRORED):
             raise gl.vm.UserError("request is not refundable")
-        if datetime.now(timezone.utc) < _parse_iso(str(r.refund_deadline)):
+        if not _refund_deadline_passed(str(r.refund_deadline)):
             raise gl.vm.UserError("refund deadline has not passed yet")
 
         r.status = REQUEST_REFUNDED

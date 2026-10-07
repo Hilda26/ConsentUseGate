@@ -219,6 +219,34 @@ def test_expired_pending_or_errored_request_can_be_refunded_permissionlessly(
     assert vm._balances.get(_addr_bytes(direct_alice), 0) == 0
 
 
+def test_review_after_refund_deadline_is_refund_only(
+    direct_deploy, direct_vm_with_transfers, direct_alice, direct_bob, direct_owner
+):
+    vm = direct_vm_with_transfers
+    c = _deploy(direct_deploy, vm, direct_alice)
+    policy_id = _create_policy(c, vm, direct_alice)
+    request_id = _request(c, vm, direct_bob, policy_id, GOOD_USE)
+
+    _warp_past_refund_deadline(vm, c, request_id)
+    _mock_approve(vm)
+    with vm.expect_revert("refund deadline has passed; refund only"):
+        c.review_request(request_id)
+
+    request = c.get_request(request_id)
+    assert request["status"] == "PENDING"
+    assert c.is_approved(policy_id, _addr_hex(direct_bob)) is False
+    assert vm._balances.get(_addr_bytes(direct_alice), 0) == 0
+    assert vm._balances.get(_addr_bytes(direct_bob), 0) == 0
+
+    vm.sender = direct_owner
+    c.refund_expired_request(request_id)
+
+    request = c.get_request(request_id)
+    assert request["status"] == "REFUNDED"
+    assert vm._balances.get(_addr_bytes(direct_alice), 0) == 0
+    assert vm._balances.get(_addr_bytes(direct_bob), 0) == FEE
+
+
 def test_refund_rejects_before_deadline_and_after_terminal_review(
     direct_deploy, direct_vm_with_transfers, direct_alice, direct_bob
 ):

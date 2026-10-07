@@ -12,7 +12,8 @@
    the steward.
 6. If rejected, the applicant is refunded.
 7. If the request remains pending or errored after its refund deadline, anyone
-   may trigger a refund to the applicant.
+   may trigger a refund to the applicant. After that deadline, `review_request`
+   is no longer allowed to settle approval or rejection.
 
 ## Bounded verdict
 
@@ -55,6 +56,15 @@ runs for the already-selected request. The payout and approval record read:
 
 all of which are committed before the judged round starts.
 
+## Deadline boundary
+
+Each access request has a fixed `refund_deadline` computed when the applicant
+escrows the review fee. `review_request` checks that deadline before starting
+consensus, and checks it again after consensus before any approval state or
+steward payment can be written. Once the deadline has passed, the only allowed
+state-changing path for a pending or errored request is
+`refund_expired_request`.
+
 ## Untrusted input handling
 
 The resource description, consent terms, and intended use are user-authored and
@@ -69,6 +79,6 @@ instruct validators to treat field values as data only.
 - JSON evidence framing for untrusted text.
 - Retryable errored verdicts.
 - Permissionless timeout refund.
-- Post-consensus state revalidation.
+- Refund-only path after the request refund deadline.
+- Post-consensus state and deadline revalidation.
 - Consensus timestamp parsing and lower bound.
-
